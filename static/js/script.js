@@ -12,9 +12,21 @@ document.addEventListener('DOMContentLoaded', function() {
         return isNaN(parsed) ? defaultVal : parsed;
     }
 
+    function checkNetworkConnection() {
+        if (!navigator.onLine) {
+            alert('网络未连接，请检查网络连接');
+            return false;
+        }
+        return true;
+    }
+
     async function refresh() {
         if (myFunds.length === 0) {
             render();
+            return;
+        }
+
+        if (!checkNetworkConnection()) {
             return;
         }
 
@@ -104,6 +116,10 @@ document.addEventListener('DOMContentLoaded', function() {
     }
 
     document.getElementById('analyze-btn').onclick = async () => {
+        if (!checkNetworkConnection()) {
+            return;
+        }
+
         const overlay = document.getElementById('loading-overlay');
         overlay.style.display = 'flex';
 
@@ -125,9 +141,14 @@ document.addEventListener('DOMContentLoaded', function() {
 
                 try {
                     const res = await fetch(`/api/stocks/${f.code}`);
-                    if (!res.ok) continue;
+                    if (!res.ok) {
+                        errorCount++;
+                        continue;
+                    }
 
                     const stocks = await res.json();
+                    if (!Array.isArray(stocks)) continue;
+
                     stocks.forEach(s => {
                         const rate = parseNum(s.rate, 0);
                         const amt = val * (rate / 100);
@@ -177,9 +198,11 @@ document.addEventListener('DOMContentLoaded', function() {
     };
 
     window.removeF = (i) => {
-        myFunds.splice(i, 1);
-        localStorage.setItem(CACHE_KEYS.FUNDS, JSON.stringify(myFunds));
-        refresh();
+        if (confirm('确定删除该基金吗？')) {
+            myFunds.splice(i, 1);
+            localStorage.setItem(CACHE_KEYS.FUNDS, JSON.stringify(myFunds));
+            refresh();
+        }
     };
 
     document.getElementById('add-btn').onclick = () => {
@@ -195,6 +218,7 @@ document.addEventListener('DOMContentLoaded', function() {
         const share = document.getElementById('inp-share').value.trim();
         const cost = document.getElementById('inp-cost').value.trim();
 
+        // 验证输入
         if (!code || !share) {
             alert('请填写基金代码和份额');
             return;
@@ -213,16 +237,34 @@ document.addEventListener('DOMContentLoaded', function() {
             return;
         }
 
+        // 检查重复
+        if (myFunds.some(f => f.code === code)) {
+            alert('该基金已添加，请勿重复添加');
+            return;
+        }
+
         myFunds.push({ code, share: shareVal, cost: costVal || 0 });
         localStorage.setItem(CACHE_KEYS.FUNDS, JSON.stringify(myFunds));
         document.getElementById('addModal').style.display = 'none';
 
+        // 清空表单
         document.getElementById('inp-code').value = '';
         document.getElementById('inp-share').value = '';
         document.getElementById('inp-cost').value = '';
 
         refresh();
     };
+
+    // 监听网络连接状态
+    window.addEventListener('online', function() {
+        console.log('网络已连接');
+        refresh();
+    });
+
+    window.addEventListener('offline', function() {
+        console.log('网络已断开');
+        alert('网络连接已断开，只能查看本地缓存数据');
+    });
 
     document.getElementById('refresh-btn').onclick = refresh;
     refresh();
